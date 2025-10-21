@@ -237,3 +237,26 @@ button:disabled {
     background: #667eea;
     border-radius: 10px;
 }
+/* Add this to the end of your existing style.css */
+
+.hour-temp img {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.hourly-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    margin-bottom: 8px;
+    background: white;
+    border-radius: 8px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.hourly-item:hover {
+    transform: translateX(5px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
