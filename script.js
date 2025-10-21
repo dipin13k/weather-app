@@ -7,6 +7,10 @@ const error = document.getElementById('error');
 const currentTemp = document.getElementById('currentTemp');
 const hourlyList = document.getElementById('hourlyList');
 const coordinates = document.getElementById('coordinates');
+const locationName = document.getElementById('locationName');
+
+// ⭐ ADD YOUR API KEY HERE ⭐
+const API_KEY = 'e2f753071aed43fd99b140302252110';
 
 function formatDateTime(dateTimeString) {
     const date = new Date(dateTimeString);
@@ -18,24 +22,6 @@ function formatDateTime(dateTimeString) {
         hour12: true
     };
     return date.toLocaleString('en-US', options);
-}
-
-function getDateRange() {
-    const today = new Date();
-    const endDate = new Date();
-    endDate.setDate(today.getDate() + 14);
-    
-    const formatDate = (date) => {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    };
-    
-    return {
-        start: formatDate(today),
-        end: formatDate(endDate)
-    };
 }
 
 async function getWeather() {
@@ -68,17 +54,30 @@ async function getWeather() {
     searchBtn.disabled = true;
 
     try {
-        const dateRange = getDateRange();
-        const apiUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&hourly=temperature_2m&start_date=${dateRange.start}&end_date=${dateRange.end}`;
-
-        const response = await fetch(apiUrl);
+        // WeatherAPI.com accepts coordinates as "lat,lon" format
+        const query = `${latitude},${longitude}`;
         
-        if (!response.ok) {
+        // Fetch current weather
+        const currentUrl = `https://api.weatherapi.com/v1/current.json?key=${API_KEY}&q=${query}&aqi=yes`;
+        const currentResponse = await fetch(currentUrl);
+        
+        if (!currentResponse.ok) {
             throw new Error('Failed to fetch weather data');
         }
+        
+        const currentData = await currentResponse.json();
+        
+        // Fetch forecast (for hourly data)
+        const forecastUrl = `https://api.weatherapi.com/v1/forecast.json?key=${API_KEY}&q=${query}&days=2&aqi=yes&alerts=no`;
+        const forecastResponse = await fetch(forecastUrl);
+        
+        if (!forecastResponse.ok) {
+            throw new Error('Failed to fetch forecast data');
+        }
+        
+        const forecastData = await forecastResponse.json();
 
-        const data = await response.json();
-        displayWeather(data, latitude, longitude);
+        displayWeather(currentData, forecastData, latitude, longitude);
 
     } catch (err) {
         showError('Error fetching weather data. Please check your coordinates and try again.');
@@ -89,31 +88,52 @@ async function getWeather() {
     }
 }
 
-function displayWeather(data, lat, lon) {
+function displayWeather(currentData, forecastData, lat, lon) {
+    // Update location name
+    locationName.textContent = `${currentData.location.name}, ${currentData.location.country}`;
+    
+    // Update coordinates
     coordinates.textContent = `${parseFloat(lat).toFixed(2)}°, ${parseFloat(lon).toFixed(2)}°`;
 
-    const currentTemperature = data.hourly.temperature_2m[0];
+    // Display current temperature
+    const currentTemperature = currentData.current.temp_c;
     currentTemp.textContent = `${currentTemperature.toFixed(1)}°C`;
 
+    // Display hourly forecast
     hourlyList.innerHTML = '';
-    const hours = Math.min(24, data.hourly.time.length);
     
-    for (let i = 0; i < hours; i++) {
+    // Get all hourly data from today and tomorrow
+    const allHours = [];
+    forecastData.forecast.forecastday.forEach(day => {
+        allHours.push(...day.hour);
+    });
+    
+    // Filter to show only upcoming hours (next 24 hours from now)
+    const now = new Date();
+    const upcomingHours = allHours.filter(hour => {
+        const hourTime = new Date(hour.time);
+        return hourTime >= now;
+    }).slice(0, 24);
+    
+    upcomingHours.forEach(hour => {
         const hourItem = document.createElement('div');
         hourItem.className = 'hourly-item';
         
         const timeDiv = document.createElement('div');
         timeDiv.className = 'hour-time';
-        timeDiv.textContent = formatDateTime(data.hourly.time[i]);
+        timeDiv.textContent = formatDateTime(hour.time);
         
         const tempDiv = document.createElement('div');
         tempDiv.className = 'hour-temp';
-        tempDiv.textContent = `${data.hourly.temperature_2m[i].toFixed(1)}°C`;
+        tempDiv.innerHTML = `
+            <img src="https:${hour.condition.icon}" alt="${hour.condition.text}" style="width: 24px; height: 24px; vertical-align: middle; margin-right: 5px;">
+            ${hour.temp_c.toFixed(1)}°C
+        `;
         
         hourItem.appendChild(timeDiv);
         hourItem.appendChild(tempDiv);
         hourlyList.appendChild(hourItem);
-    }
+    });
 
     weatherResult.classList.add('show');
 }
